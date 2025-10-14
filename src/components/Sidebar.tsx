@@ -35,11 +35,11 @@ export const Sidebar = () => {
           <div className="p-6 border-b border-border">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center text-primary-foreground font-bold text-xl">
-                E
+                C
               </div>
               {!collapsed && (
                 <div>
-                  <h1 className="text-lg font-bold">Expense Tracker</h1>
+                  <h1 className="text-lg font-bold">Centsible</h1>
                   <p className="text-xs text-muted-foreground">Manage your finances</p>
                 </div>
               )}
