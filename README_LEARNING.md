@@ -1,24 +1,7 @@
 # Centsible - Simplified Learning Version
 
-This is a simplified version of the Centsible expense tracking application, designed for project-based learning. All complex functionality has been removed and replaced with static mock data, allowing you to focus on learning the design patterns and React concepts without getting overwhelmed by business logic.
+This is a simplified version of the Centsible expense tracking application, designed for project-based learning. All complex functionality has been removed and replaced with static mock data, allowing us to focus on learning the design patterns and React concepts without getting overwhelmed by business logic.
 
-## What Was Simplified
-
-### ✅ Removed Complex Features
-- **State Management**: No more complex useState hooks, async operations, or data mutations
-- **API Calls**: No simulated async calls or loading states
-- **Form Handling**: Forms are now display-only for visual learning
-- **CRUD Operations**: No add, edit, or delete functionality
-- **User Interactions**: Modals and buttons are simplified or disabled
-
-### ✅ What You Still Have
-- **Beautiful UI**: All the Tailwind CSS styling and component design
-- **Mock Data**: Realistic sample data in `src/data/mockData.ts`
-- **Navigation**: Working React Router between pages
-- **Charts**: Recharts visualizations with static data
-- **Animations**: Framer Motion animations for learning
-- **Theme System**: Working dark/light theme toggle
-- **Responsive Design**: Mobile-friendly layouts
 
 ## Project Structure
 
