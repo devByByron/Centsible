@@ -1,12 +1,15 @@
-import { Search, Moon, Sun } from "lucide-react";
+import { Search, Moon, Sun, Plus } from "lucide-react";
+import { useState } from "react";
 import { useTheme } from "@/context/ThemeContext";
 import { useTransactions } from "@/context/TransactionContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { TransactionModal } from "@/components/TransactionModal";
 
 export const Navbar = () => {
   const { theme, toggleTheme } = useTheme();
   const { transactions } = useTransactions();
+  const [addModalOpen, setAddModalOpen] = useState(false);
 
   const totalIncome = transactions
     .filter((t) => t.type === "income")
@@ -42,6 +45,14 @@ export const Navbar = () => {
           </div>
 
           <Button
+            size="icon"
+            onClick={() => setAddModalOpen(true)}
+            className="rounded-xl bg-primary hover:bg-primary/90"
+          >
+            <Plus className="h-5 w-5" />
+          </Button>
+
+          <Button
             variant="ghost"
             size="icon"
             onClick={toggleTheme}
@@ -55,6 +66,13 @@ export const Navbar = () => {
           </Button>
         </div>
       </div>
+
+      {/* Add Transaction Modal */}
+      <TransactionModal
+        open={addModalOpen}
+        onClose={() => setAddModalOpen(false)}
+        transaction={null}
+      />
     </header>
   );
 };
