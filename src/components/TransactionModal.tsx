@@ -5,97 +5,70 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { useTransactions, Transaction } from "@/context/TransactionContext";
-import { toast } from "sonner";
+import { incomeCategories, expenseCategories, Transaction } from "@/data/mockData";
 
 type TransactionModalProps = {
   open: boolean;
   onClose: () => void;
-  transaction?: Transaction;
-};
-
-const categories = {
-  income: ["Salary", "Freelance", "Investment", "Business", "Other"],
-  expense: ["Food", "Rent", "Transport", "Utilities", "Entertainment", "Healthcare", "Shopping", "Other"],
+  transaction?: Transaction | null;
 };
 
 export const TransactionModal = ({ open, onClose, transaction }: TransactionModalProps) => {
-  const { addTransaction, updateTransaction } = useTransactions();
-  const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    type: "expense" as "income" | "expense",
-    amount: "",
-    category: "",
-    date: new Date().toISOString().split("T")[0],
-    description: "",
-  });
+  const [type, setType] = useState<"income" | "expense">("expense");
+  const [amount, setAmount] = useState("");
+  const [category, setCategory] = useState("");
+  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [description, setDescription] = useState("");
 
+  // Populate form when editing a transaction
   useEffect(() => {
     if (transaction) {
-      setFormData({
-        type: transaction.type,
-        amount: transaction.amount.toString(),
-        category: transaction.category,
-        date: transaction.date,
-        description: transaction.description,
-      });
+      setType(transaction.type);
+      setAmount(transaction.amount.toString());
+      setCategory(transaction.category);
+      setDate(transaction.date);
+      setDescription(transaction.description);
     } else {
-      setFormData({
-        type: "expense",
-        amount: "",
-        category: "",
-        date: new Date().toISOString().split("T")[0],
-        description: "",
-      });
+      // Reset form for new transaction
+      setType("expense");
+      setAmount("");
+      setCategory("");
+      setDate(new Date().toISOString().split("T")[0]);
+      setDescription("");
     }
   }, [transaction, open]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-
-    try {
-      const data = {
-        type: formData.type,
-        amount: parseFloat(formData.amount),
-        category: formData.category,
-        date: formData.date,
-        description: formData.description,
-      };
-
-      if (transaction) {
-        await updateTransaction(transaction.id, data);
-        toast.success("Transaction updated successfully!");
-      } else {
-        await addTransaction(data);
-        toast.success("Transaction added successfully!");
-      }
-      onClose();
-    } catch (error) {
-      toast.error("Something went wrong!");
-    } finally {
-      setLoading(false);
-    }
+  const handleSubmit = () => {
+    // TODO: Implement save/update functionality
+    console.log('Saving transaction:', {
+      type,
+      amount: parseFloat(amount),
+      category,
+      date,
+      description,
+      id: transaction?.id
+    });
+    onClose();
   };
 
+  const categories = type === "income" ? incomeCategories : expenseCategories;
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>{transaction ? "Edit Transaction" : "Add Transaction"}</DialogTitle>
+          <DialogTitle>{transaction ? 'Edit Transaction' : 'Add Transaction'}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        
+        <div className="space-y-4 py-4">
           <div className="grid grid-cols-2 gap-4">
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="type">Type</Label>
-              <Select
-                value={formData.type}
-                onValueChange={(value: "income" | "expense") => {
-                  setFormData({ ...formData, type: value, category: "" });
-                }}
-              >
+              <Select value={type} onValueChange={(value: "income" | "expense") => {
+                setType(value);
+                setCategory(""); // Reset category when type changes
+              }}>
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Select type" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="income">Income</SelectItem>
@@ -104,32 +77,26 @@ export const TransactionModal = ({ open, onClose, transaction }: TransactionModa
               </Select>
             </div>
 
-            <div>
-              <Label htmlFor="amount">Amount</Label>
+            <div className="space-y-2">
+              <Label htmlFor="amount">Amount ($)</Label>
               <Input
                 id="amount"
                 type="number"
-                step="0.01"
-                required
-                value={formData.amount}
-                onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
                 placeholder="0.00"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
               />
             </div>
           </div>
 
-          <div>
+          <div className="space-y-2">
             <Label htmlFor="category">Category</Label>
-            <Select
-              value={formData.category}
-              onValueChange={(value) => setFormData({ ...formData, category: value })}
-              required
-            >
+            <Select value={category} onValueChange={setCategory}>
               <SelectTrigger>
                 <SelectValue placeholder="Select category" />
               </SelectTrigger>
               <SelectContent>
-                {categories[formData.type].map((cat) => (
+                {categories.map((cat) => (
                   <SelectItem key={cat} value={cat}>
                     {cat}
                   </SelectItem>
@@ -138,37 +105,35 @@ export const TransactionModal = ({ open, onClose, transaction }: TransactionModa
             </Select>
           </div>
 
-          <div>
+          <div className="space-y-2">
             <Label htmlFor="date">Date</Label>
             <Input
               id="date"
               type="date"
-              required
-              value={formData.date}
-              onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
             />
           </div>
 
-          <div>
+          <div className="space-y-2">
             <Label htmlFor="description">Description</Label>
             <Textarea
               id="description"
-              rows={3}
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              placeholder="Add a note..."
+              placeholder="Enter description..."
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
             />
           </div>
+        </div>
 
-          <div className="flex gap-3 pt-4">
-            <Button type="button" variant="outline" onClick={onClose} className="flex-1">
-              Cancel
-            </Button>
-            <Button type="submit" disabled={loading} className="flex-1">
-              {loading ? "Saving..." : transaction ? "Update" : "Add"}
-            </Button>
-          </div>
-        </form>
+        <div className="flex justify-end space-x-2">
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={handleSubmit}>
+            {transaction ? 'Update' : 'Add Transaction'}
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );

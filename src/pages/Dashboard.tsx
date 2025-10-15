@@ -1,152 +1,148 @@
 import { useState } from "react";
 import { useTransactions } from "@/context/TransactionContext";
 import { StatCard } from "@/components/StatCard";
-import { TransactionModal } from "@/components/TransactionModal";
 import { Button } from "@/components/ui/button";
-import { Plus, DollarSign, TrendingUp, TrendingDown, Pencil, Trash2 } from "lucide-react";
+import { TransactionModal } from "@/components/TransactionModal";
+import { DeleteConfirmationDialog } from "@/components/DeleteConfirmationDialog";
+import { DollarSign, TrendingUp, TrendingDown, Pencil, Trash2 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from "recharts";
-import { toast } from "sonner";
 import { motion } from "framer-motion";
-
-const COLORS = ["#8b5cf6", "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#ec4899"];
+import { categoryStats, monthlyData, summary, Transaction } from "@/data/mockData";
 
 const Dashboard = () => {
-  const { transactions, deleteTransaction } = useTransactions();
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editTransaction, setEditTransaction] = useState(undefined);
+  const { transactions } = useTransactions();
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
 
-  const totalIncome = transactions
-    .filter((t) => t.type === "income")
-    .reduce((sum, t) => sum + t.amount, 0);
+  // Using static calculations from mock data for learning
+  const totalIncome = summary.totalIncome;
+  const totalExpenses = summary.totalExpenses;
+  const balance = summary.currentBalance;
 
-  const totalExpenses = transactions
-    .filter((t) => t.type === "expense")
-    .reduce((sum, t) => sum + t.amount, 0);
+  // Recent transactions for display (first 5)
+  const recentTransactions = transactions.slice(0, 5);
 
-  const balance = totalIncome - totalExpenses;
-
-  // Expenses by category
-  const expensesByCategory = transactions
-    .filter((t) => t.type === "expense")
-    .reduce((acc, t) => {
-      acc[t.category] = (acc[t.category] || 0) + t.amount;
-      return acc;
-    }, {} as Record<string, number>);
-
-  const pieData = Object.entries(expensesByCategory).map(([name, value]) => ({
-    name,
-    value,
-  }));
-
-  // Income vs Expenses per month (mock data for demo)
-  const barData = [
-    { month: "Jan", income: 5000, expenses: 3200 },
-    { month: "Feb", income: 5500, expenses: 3800 },
-    { month: "Mar", income: 5300, expenses: 3500 },
-  ];
-
-  const recentTransactions = [...transactions].slice(0, 5);
-
-  const handleDelete = async (id: string) => {
-    try {
-      await deleteTransaction(id);
-      toast.success("Transaction deleted successfully!");
-    } catch (error) {
-      toast.error("Failed to delete transaction");
-    }
+  const handleEdit = (transaction: Transaction) => {
+    setSelectedTransaction(transaction);
+    setEditModalOpen(true);
   };
 
-  const handleEdit = (transaction: any) => {
-    setEditTransaction(transaction);
-    setModalOpen(true);
+  const handleDeleteClick = (transaction: Transaction) => {
+    setSelectedTransaction(transaction);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = () => {
+    // TODO: Implement delete functionality
+    console.log('Deleting transaction:', selectedTransaction?.id);
+    setSelectedTransaction(null);
+  };
+
+  const handleModalClose = () => {
+    setEditModalOpen(false);
+    setSelectedTransaction(null);
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 p-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Dashboard</h1>
-          <p className="text-muted-foreground">Overview of your finances</p>
-        </div>
-        <Button
-          onClick={() => {
-            setEditTransaction(undefined);
-            setModalOpen(true);
-          }}
-          className="gap-2"
-        >
-          <Plus className="h-4 w-4" />
-          Add Transaction
-        </Button>
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+        <p className="text-muted-foreground">
+          Welcome back! Here's your financial overview.
+        </p>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatCard
-          title="Total Balance"
-          value={`$${balance.toLocaleString()}`}
-          icon={DollarSign}
-          trend={balance >= 0 ? "Looking good!" : "Needs attention"}
-          variant={balance >= 0 ? "success" : "danger"}
-        />
-        <StatCard
-          title="Total Income"
-          value={`$${totalIncome.toLocaleString()}`}
-          icon={TrendingUp}
-          variant="success"
-        />
-        <StatCard
-          title="Total Expenses"
-          value={`$${totalExpenses.toLocaleString()}`}
-          icon={TrendingDown}
-          variant="danger"
-        />
+      {/* Stats Cards */}
+      <div className="grid gap-6 md:grid-cols-3">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+        >
+          <StatCard
+            title="Total Balance"
+            value={`$${balance.toLocaleString()}`}
+            icon={DollarSign}
+            trend="Looking good!"
+            variant="success"
+          />
+        </motion.div>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <StatCard
+            title="Total Income"
+            value={`$${totalIncome.toLocaleString()}`}
+            icon={TrendingUp}
+            trend="8.2% increase"
+            variant="success"
+          />
+        </motion.div>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+        >
+          <StatCard
+            title="Total Expenses"
+            value={`$${totalExpenses.toLocaleString()}`}
+            icon={TrendingDown}
+            trend="3.1% decrease"
+            variant="default"
+          />
+        </motion.div>
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Expenses by Category */}
         <motion.div
+          className="rounded-lg border bg-card text-card-foreground shadow-sm p-6"
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
-          className="bg-card rounded-2xl p-6 border border-border shadow-custom"
+          transition={{ delay: 0.4 }}
         >
-          <h2 className="text-xl font-semibold mb-4">Expenses by Category</h2>
+          <h3 className="text-lg font-semibold mb-4">Expenses by Category</h3>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie
-                data={pieData}
+                data={categoryStats}
                 cx="50%"
                 cy="50%"
-                labelLine={false}
-                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                 outerRadius={80}
                 fill="#8884d8"
-                dataKey="value"
+                dataKey="amount"
+                label={({ name, percentage }) => `${name} (${percentage}%)`}
               >
-                {pieData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                {categoryStats.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
                 ))}
               </Pie>
-              <Tooltip />
+              <Tooltip formatter={(value) => [`$${value}`, "Amount"]} />
             </PieChart>
           </ResponsiveContainer>
         </motion.div>
 
+        {/* Income vs Expenses */}
         <motion.div
+          className="rounded-lg border bg-card text-card-foreground shadow-sm p-6"
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
-          className="bg-card rounded-2xl p-6 border border-border shadow-custom"
+          transition={{ delay: 0.5 }}
         >
-          <h2 className="text-xl font-semibold mb-4">Income vs Expenses</h2>
+          <h3 className="text-lg font-semibold mb-4">Income vs Expenses</h3>
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={barData}>
+            <BarChart data={monthlyData}>
               <XAxis dataKey="month" />
               <YAxis />
-              <Tooltip />
+              <Tooltip formatter={(value) => [`$${value}`, ""]} />
               <Legend />
-              <Bar dataKey="income" fill="hsl(var(--success))" radius={[8, 8, 0, 0]} />
-              <Bar dataKey="expenses" fill="hsl(var(--destructive))" radius={[8, 8, 0, 0]} />
+              <Bar dataKey="income" fill="#10b981" name="Income" />
+              <Bar dataKey="expenses" fill="#ef4444" name="Expenses" />
             </BarChart>
           </ResponsiveContainer>
         </motion.div>
@@ -154,73 +150,97 @@ const Dashboard = () => {
 
       {/* Recent Transactions */}
       <motion.div
+        className="rounded-lg border bg-card text-card-foreground shadow-sm"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-card rounded-2xl p-6 border border-border shadow-custom"
+        transition={{ delay: 0.6 }}
       >
-        <h2 className="text-xl font-semibold mb-4">Recent Transactions</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Date</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Description</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Category</th>
-                <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Amount</th>
-                <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentTransactions.map((transaction) => (
-                <tr key={transaction.id} className="border-b border-border hover:bg-accent/50 transition-colors">
-                  <td className="py-3 px-4 text-sm">{new Date(transaction.date).toLocaleDateString()}</td>
-                  <td className="py-3 px-4 text-sm">{transaction.description}</td>
-                  <td className="py-3 px-4 text-sm">
-                    <span className="px-2 py-1 rounded-lg bg-secondary text-secondary-foreground text-xs">
-                      {transaction.category}
-                    </span>
-                  </td>
-                  <td
-                    className={`py-3 px-4 text-sm text-right font-semibold ${
-                      transaction.type === "income" ? "text-success" : "text-destructive"
-                    }`}
-                  >
-                    {transaction.type === "income" ? "+" : "-"}${transaction.amount.toLocaleString()}
-                  </td>
-                  <td className="py-3 px-4 text-right">
-                    <div className="flex gap-2 justify-end">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleEdit(transaction)}
-                        className="h-8 w-8"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDelete(transaction.id)}
-                        className="h-8 w-8 text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </td>
+        <div className="p-6">
+          <h3 className="text-lg font-semibold mb-4">Recent Transactions</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left py-3 px-4 font-medium text-muted-foreground">Date</th>
+                  <th className="text-left py-3 px-4 font-medium text-muted-foreground">Description</th>
+                  <th className="text-left py-3 px-4 font-medium text-muted-foreground">Category</th>
+                  <th className="text-right py-3 px-4 font-medium text-muted-foreground">Amount</th>
+                  <th className="text-center py-3 px-4 font-medium text-muted-foreground">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {recentTransactions.map((transaction, index) => (
+                  <motion.tr
+                    key={transaction.id}
+                    className="border-b hover:bg-accent/50 transition-colors"
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                  >
+                    <td className="py-3 px-4 text-sm text-muted-foreground">
+                      {new Date(transaction.date).toLocaleDateString('en-US', { 
+                        year: 'numeric', 
+                        month: '2-digit', 
+                        day: '2-digit' 
+                      })}
+                    </td>
+                    <td className="py-3 px-4 font-medium">
+                      {transaction.description}
+                    </td>
+                    <td className="py-3 px-4 text-sm">
+                      {transaction.category}
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <span className={`font-semibold ${
+                        transaction.type === "income" ? "text-green-600" : "text-red-600"
+                      }`}>
+                        {transaction.type === "income" ? "+" : "-"}${transaction.amount.toLocaleString()}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center justify-center space-x-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                          onClick={() => handleEdit(transaction)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          onClick={() => handleDeleteClick(transaction)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </td>
+                  </motion.tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </motion.div>
 
+      {/* Edit Transaction Modal */}
       <TransactionModal
-        open={modalOpen}
+        open={editModalOpen}
+        onClose={handleModalClose}
+        transaction={selectedTransaction}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <DeleteConfirmationDialog
+        open={deleteDialogOpen}
         onClose={() => {
-          setModalOpen(false);
-          setEditTransaction(undefined);
+          setDeleteDialogOpen(false);
+          setSelectedTransaction(null);
         }}
-        transaction={editTransaction}
+        onConfirm={handleDeleteConfirm}
+        transactionDescription={selectedTransaction?.description}
       />
     </div>
   );
