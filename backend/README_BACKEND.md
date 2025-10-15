@@ -16,8 +16,9 @@ A comprehensive, step-by-step guide to building and integrating a Node.js, Expre
 8. [Testing the API](#testing-the-api)
 9. [Frontend Integration](#frontend-integration)
 10. [Deployment](#deployment)
-11. [Advanced Features](#advanced-features)
-12. [Troubleshooting](#troubleshooting)
+11. [User Authentication System](#user-authentication-system)
+12. [Additional Advanced Features](#additional-advanced-features)
+13. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -95,10 +96,13 @@ npm install express mongoose cors dotenv
 ### Step 4: Install Development Dependencies
 
 ```bash
-npm install --save-dev nodemon
+npm install --save-dev nodemon prettier eslint
 ```
 
-**nodemon**: Automatically restarts server when code changes (development only)
+**Development Dependency Explanations:**
+- **nodemon**: Automatically restarts server when code changes (development only)
+- **prettier**: Code formatter to maintain consistent code style
+- **eslint**: Linter to catch errors and enforce code quality standards
 
 ### Step 5: Configure package.json Scripts
 
@@ -113,7 +117,10 @@ Open `package.json` and add these scripts:
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"**/*.{js,json,md}\""
   },
   "keywords": ["expense", "tracker", "api"],
   "author": "Byron Young & Raees Johaadien",
@@ -125,7 +132,9 @@ Open `package.json` and add these scripts:
     "dotenv": "^16.3.1"
   },
   "devDependencies": {
-    "nodemon": "^3.0.1"
+    "nodemon": "^3.0.1",
+    "prettier": "^3.0.0",
+    "eslint": "^8.50.0"
   }
 }
 ```
@@ -202,6 +211,66 @@ node_modules/
 ```
 
 **Why?** This prevents sensitive data (like your MongoDB password) from being committed to Git.
+
+### Step 7: Configure Prettier
+
+Create `.prettierrc` in the backend folder:
+
+```json
+{
+  "semi": true,
+  "singleQuote": true,
+  "tabWidth": 2,
+  "trailingComma": "es5",
+  "printWidth": 80,
+  "arrowParens": "always"
+}
+```
+
+Create `.prettierignore` in the backend folder:
+
+```
+node_modules/
+.env
+*.log
+```
+
+### Step 8: Configure ESLint
+
+Create `.eslintrc.json` in the backend folder:
+
+```json
+{
+  "env": {
+    "node": true,
+    "es2021": true
+  },
+  "extends": ["eslint:recommended"],
+  "parserOptions": {
+    "ecmaVersion": "latest",
+    "sourceType": "module"
+  },
+  "rules": {
+    "no-console": "off",
+    "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
+    "semi": ["error", "always"],
+    "quotes": ["error", "single"]
+  }
+}
+```
+
+Create `.eslintignore` in the backend folder:
+
+```
+node_modules/
+.env
+*.log
+```
+
+**Using Prettier & ESLint:**
+- Format code: `npm run format`
+- Check for linting errors: `npm run lint`
+- Auto-fix linting errors: `npm run lint:fix`
 
 ---
 
@@ -324,6 +393,20 @@ You should see:
 ```
 
 Visit `http://localhost:5000` in your browser - you should see a JSON response.
+
+---
+
+## 🏢 Analogy: What is the Server?
+
+Think of your backend server as a restaurant manager:
+- The **server.js** file is the manager who opens the restaurant, sets up the staff, connects to the kitchen (database), and makes sure everything runs smoothly.
+- The **waiter (Express.js)** takes orders (requests) from customers (frontend), gets the right dish (data) from the kitchen (MongoDB), and serves it back.
+- The **kitchen (MongoDB)** stores all the ingredients (data) and prepares the meals (responses).
+- The **menu (routes)** lists all the dishes (API endpoints) you can order.
+
+So, when your frontend wants something (like a list of transactions), it sends a request to the backend (restaurant). The manager (server.js) makes sure the waiter (Express) gets the right dish from the kitchen (MongoDB) and serves it to the customer (frontend).
+
+This analogy helps you visualize how the backend works and how each part fits together!
 
 ---
 
@@ -987,98 +1070,1618 @@ VITE_API_URL=https://your-backend-url.onrender.com/api
 
 ---
 
-## 🔐 Advanced Features
+## 🔐 User Authentication System
 
-### 1. User Authentication (JWT)
+This section covers implementing a complete authentication system with:
+- User Registration
+- Email Verification (OTP)
+- User Login (JWT)
+- Forgot Password
+- Reset Password
+- Protected Routes
 
-Install additional packages:
+---
+
+### Step 1: Install Authentication Dependencies
+
 ```bash
-npm install bcryptjs jsonwebtoken
+npm install bcryptjs jsonwebtoken nodemailer
 ```
 
+**Package Explanations:**
+- **bcryptjs**: Hashes passwords securely before storing in database
+- **jsonwebtoken**: Creates and verifies JWT tokens for authentication
+- **nodemailer**: Sends emails (for OTP verification and password reset)
+
+---
+
+### Step 2: Update Environment Variables
+
+Add these to your `.env` file:
+
+```env
+# Existing variables...
+MONGO_URI=mongodb+srv://...
+PORT=5000
+NODE_ENV=development
+CLIENT_URL=http://localhost:8080
+
+# JWT Configuration
+JWT_SECRET=your_super_secret_jwt_key_here_make_it_long_and_random
+JWT_EXPIRE=7d
+
+# Email Configuration (using Gmail as example)
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_USER=your-email@gmail.com
+EMAIL_PASSWORD=your-app-specific-password
+EMAIL_FROM=Centsible <noreply@centsible.com>
+```
+
+**Important:**
+- Generate a strong random string for `JWT_SECRET` (at least 32 characters)
+- For Gmail, use an [App Password](https://support.google.com/accounts/answer/185833?hl=en), not your regular password
+- Never commit `.env` to Git!
+
+---
+
+### Step 3: Create User Model
+
 Create `models/User.js`:
+
 ```javascript
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 const userSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: [true, 'Name is required'],
+    trim: true
+  },
   email: {
     type: String,
-    required: true,
+    required: [true, 'Email is required'],
     unique: true,
-    lowercase: true
+    lowercase: true,
+    trim: true,
+    match: [
+      /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
+      'Please provide a valid email'
+    ]
   },
   password: {
     type: String,
-    required: true,
-    minlength: 6
+    required: [true, 'Password is required'],
+    minlength: [6, 'Password must be at least 6 characters'],
+    select: false // Don't return password by default in queries
   },
-  name: {
+  isVerified: {
+    type: Boolean,
+    default: false
+  },
+  otp: {
     type: String,
-    required: true
+    select: false // Don't return OTP in queries
+  },
+  otpExpires: {
+    type: Date,
+    select: false
+  },
+  resetPasswordOTP: {
+    type: String,
+    select: false
+  },
+  resetPasswordExpires: {
+    type: Date,
+    select: false
   }
-}, { timestamps: true });
+}, {
+  timestamps: true
+});
 
-// Hash password before saving
+// Hash password before saving to database
 userSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) return next();
-  this.password = await bcrypt.hash(this.password, 10);
+  // Only hash if password is modified
+  if (!this.isModified('password')) {
+    return next();
+  }
+  
+  // Generate salt and hash password
+  const salt = await bcrypt.genSalt(10);
+  this.password = await bcrypt.hash(this.password, salt);
   next();
 });
 
-// Compare password method
+// Method to compare passwords
 userSchema.methods.comparePassword = async function(candidatePassword) {
-  return bcrypt.compare(candidatePassword, this.password);
+  return await bcrypt.compare(candidatePassword, this.password);
+};
+
+// Method to generate 6-digit OTP
+userSchema.methods.generateOTP = function() {
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  this.otp = otp;
+  this.otpExpires = Date.now() + 10 * 60 * 1000; // OTP expires in 10 minutes
+  return otp;
+};
+
+// Method to generate reset password OTP
+userSchema.methods.generateResetOTP = function() {
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  this.resetPasswordOTP = otp;
+  this.resetPasswordExpires = Date.now() + 10 * 60 * 1000; // Expires in 10 minutes
+  return otp;
 };
 
 module.exports = mongoose.model('User', userSchema);
 ```
 
-### 2. Input Validation
+**Schema Breakdown:**
+- **name**: User's full name
+- **email**: Unique email with validation
+- **password**: Hashed password (not returned in queries by default)
+- **isVerified**: Boolean to track email verification status
+- **otp**: Temporary OTP for email verification
+- **otpExpires**: When the OTP expires
+- **resetPasswordOTP**: OTP for password reset
+- **resetPasswordExpires**: When the reset OTP expires
 
-Install validator:
+---
+
+### Step 4: Create Email Utility
+
+Create `utils/sendEmail.js`:
+
+```javascript
+const nodemailer = require('nodemailer');
+
+/**
+ * Send email using nodemailer
+ * @param {Object} options - Email options
+ * @param {string} options.to - Recipient email
+ * @param {string} options.subject - Email subject
+ * @param {string} options.text - Plain text message
+ * @param {string} options.html - HTML message
+ */
+const sendEmail = async (options) => {
+  try {
+    // Create transporter
+    const transporter = nodemailer.createTransport({
+      host: process.env.EMAIL_HOST,
+      port: process.env.EMAIL_PORT,
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASSWORD
+      }
+    });
+
+    // Email options
+    const mailOptions = {
+      from: process.env.EMAIL_FROM,
+      to: options.to,
+      subject: options.subject,
+      text: options.text,
+      html: options.html
+    };
+
+    // Send email
+    const info = await transporter.sendMail(mailOptions);
+    console.log('✅ Email sent:', info.messageId);
+    return info;
+  } catch (error) {
+    console.error('❌ Email send error:', error);
+    throw new Error('Email could not be sent');
+  }
+};
+
+module.exports = sendEmail;
+```
+
+**How it works:**
+- Creates a nodemailer transporter with your email credentials
+- Sends emails with customizable subject, text, and HTML content
+- Returns success or throws error
+
+---
+
+### Step 5: Create Authentication Middleware
+
+Create `middleware/auth.js`:
+
+```javascript
+const jwt = require('jsonwebtoken');
+const User = require('../models/User');
+
+/**
+ * Middleware to protect routes - verifies JWT token
+ * Add this middleware to any route that requires authentication
+ */
+exports.protect = async (req, res, next) => {
+  try {
+    let token;
+
+    // Check if token exists in Authorization header
+    if (
+      req.headers.authorization &&
+      req.headers.authorization.startsWith('Bearer')
+    ) {
+      // Extract token from "Bearer TOKEN"
+      token = req.headers.authorization.split(' ')[1];
+    }
+
+    // Check if token exists
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        error: 'Not authorized to access this route'
+      });
+    }
+
+    try {
+      // Verify token
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+      // Get user from database (exclude password)
+      req.user = await User.findById(decoded.id);
+
+      // Check if user still exists
+      if (!req.user) {
+        return res.status(401).json({
+          success: false,
+          error: 'User no longer exists'
+        });
+      }
+
+      // Check if user is verified
+      if (!req.user.isVerified) {
+        return res.status(401).json({
+          success: false,
+          error: 'Please verify your email first'
+        });
+      }
+
+      next(); // Continue to next middleware/route handler
+    } catch (err) {
+      return res.status(401).json({
+        success: false,
+        error: 'Not authorized to access this route'
+      });
+    }
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: 'Server error in authentication'
+    });
+  }
+};
+
+/**
+ * Generate JWT token
+ */
+exports.generateToken = (userId) => {
+  return jwt.sign({ id: userId }, process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_EXPIRE
+  });
+};
+```
+
+**How it works:**
+- Extracts JWT token from `Authorization: Bearer <token>` header
+- Verifies the token is valid and not expired
+- Checks if user exists and is verified
+- Attaches user to `req.user` for use in route handlers
+- Use `protect` middleware on any route that requires authentication
+
+---
+
+### Step 6: Create Authentication Routes
+
+Create `routes/auth.js`:
+
+```javascript
+const express = require('express');
+const router = express.Router();
+const User = require('../models/User');
+const sendEmail = require('../utils/sendEmail');
+const { protect, generateToken } = require('../middleware/auth');
+
+// ============================================
+// REGISTER USER
+// ============================================
+router.post('/register', async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+
+    // Validate input
+    if (!name || !email || !password) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please provide name, email, and password'
+      });
+    }
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email already registered'
+      });
+    }
+
+    // Create user
+    const user = new User({
+      name,
+      email,
+      password,
+      isVerified: false
+    });
+
+    // Generate OTP
+    const otp = user.generateOTP();
+
+    // Save user
+    await user.save();
+
+    // Send OTP email
+    const message = `
+      <h1>Welcome to Centsible!</h1>
+      <p>Hi ${name},</p>
+      <p>Thank you for registering. Please verify your email using the OTP below:</p>
+      <h2 style="color: #4CAF50; font-size: 32px; letter-spacing: 5px;">${otp}</h2>
+      <p>This OTP will expire in 10 minutes.</p>
+      <p>If you didn't create an account, please ignore this email.</p>
+    `;
+
+    await sendEmail({
+      to: email,
+      subject: 'Verify Your Centsible Account',
+      html: message
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Registration successful! Please check your email for OTP verification.',
+      data: {
+        email: user.email,
+        name: user.name
+      }
+    });
+  } catch (error) {
+    console.error('Register error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Registration failed'
+    });
+  }
+});
+
+// ============================================
+// VERIFY EMAIL WITH OTP
+// ============================================
+router.post('/verify', async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    // Validate input
+    if (!email || !otp) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please provide email and OTP'
+      });
+    }
+
+    // Find user with OTP (include otp and otpExpires fields)
+    const user = await User.findOne({ email }).select('+otp +otpExpires');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    // Check if already verified
+    if (user.isVerified) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email already verified'
+      });
+    }
+
+    // Check if OTP matches
+    if (user.otp !== otp) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid OTP'
+      });
+    }
+
+    // Check if OTP has expired
+    if (Date.now() > user.otpExpires) {
+      return res.status(400).json({
+        success: false,
+        error: 'OTP has expired. Please request a new one.'
+      });
+    }
+
+    // Verify user
+    user.isVerified = true;
+    user.otp = undefined;
+    user.otpExpires = undefined;
+    await user.save();
+
+    // Generate JWT token
+    const token = generateToken(user._id);
+
+    res.json({
+      success: true,
+      message: 'Email verified successfully!',
+      token,
+      data: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        isVerified: user.isVerified
+      }
+    });
+  } catch (error) {
+    console.error('Verify error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Verification failed'
+    });
+  }
+});
+
+// ============================================
+// RESEND OTP
+// ============================================
+router.post('/resend-otp', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please provide email'
+      });
+    }
+
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    if (user.isVerified) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email already verified'
+      });
+    }
+
+    // Generate new OTP
+    const otp = user.generateOTP();
+    await user.save();
+
+    // Send OTP email
+    const message = `
+      <h1>Your New OTP</h1>
+      <p>Hi ${user.name},</p>
+      <p>Here is your new OTP to verify your email:</p>
+      <h2 style="color: #4CAF50; font-size: 32px; letter-spacing: 5px;">${otp}</h2>
+      <p>This OTP will expire in 10 minutes.</p>
+    `;
+
+    await sendEmail({
+      to: email,
+      subject: 'Your New Centsible OTP',
+      html: message
+    });
+
+    res.json({
+      success: true,
+      message: 'New OTP sent to your email'
+    });
+  } catch (error) {
+    console.error('Resend OTP error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to resend OTP'
+    });
+  }
+});
+
+// ============================================
+// LOGIN USER
+// ============================================
+router.post('/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // Validate input
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please provide email and password'
+      });
+    }
+
+    // Find user with password field
+    const user = await User.findOne({ email }).select('+password');
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid credentials'
+      });
+    }
+
+    // Check if user is verified
+    if (!user.isVerified) {
+      return res.status(401).json({
+        success: false,
+        error: 'Please verify your email first'
+      });
+    }
+
+    // Compare passwords
+    const isMatch = await user.comparePassword(password);
+
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid credentials'
+      });
+    }
+
+    // Generate JWT token
+    const token = generateToken(user._id);
+
+    res.json({
+      success: true,
+      message: 'Login successful',
+      token,
+      data: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        isVerified: user.isVerified
+      }
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Login failed'
+    });
+  }
+});
+
+// ============================================
+// FORGOT PASSWORD
+// ============================================
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please provide email'
+      });
+    }
+
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'No account found with that email'
+      });
+    }
+
+    // Generate reset OTP
+    const resetOTP = user.generateResetOTP();
+    await user.save();
+
+    // Send reset OTP email
+    const message = `
+      <h1>Password Reset Request</h1>
+      <p>Hi ${user.name},</p>
+      <p>You requested a password reset. Use the OTP below to reset your password:</p>
+      <h2 style="color: #FF5722; font-size: 32px; letter-spacing: 5px;">${resetOTP}</h2>
+      <p>This OTP will expire in 10 minutes.</p>
+      <p>If you didn't request this, please ignore this email.</p>
+    `;
+
+    await sendEmail({
+      to: email,
+      subject: 'Reset Your Centsible Password',
+      html: message
+    });
+
+    res.json({
+      success: true,
+      message: 'Password reset OTP sent to your email'
+    });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to process request'
+    });
+  }
+});
+
+// ============================================
+// RESET PASSWORD
+// ============================================
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+
+    // Validate input
+    if (!email || !otp || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please provide email, OTP, and new password'
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        error: 'Password must be at least 6 characters'
+      });
+    }
+
+    // Find user with reset OTP fields
+    const user = await User.findOne({ email }).select('+resetPasswordOTP +resetPasswordExpires');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    // Check if OTP matches
+    if (user.resetPasswordOTP !== otp) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid OTP'
+      });
+    }
+
+    // Check if OTP has expired
+    if (Date.now() > user.resetPasswordExpires) {
+      return res.status(400).json({
+        success: false,
+        error: 'OTP has expired. Please request a new one.'
+      });
+    }
+
+    // Update password
+    user.password = newPassword;
+    user.resetPasswordOTP = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Password reset successful! You can now login with your new password.'
+    });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Password reset failed'
+    });
+  }
+});
+
+// ============================================
+// GET CURRENT USER (Protected Route Example)
+// ============================================
+router.get('/me', protect, async (req, res) => {
+  try {
+    res.json({
+      success: true,
+      data: {
+        id: req.user._id,
+        name: req.user.name,
+        email: req.user.email,
+        isVerified: req.user.isVerified,
+        createdAt: req.user.createdAt
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get user'
+    });
+  }
+});
+
+module.exports = router;
+```
+
+**Route Explanations:**
+- **POST /api/auth/register**: Creates new user and sends OTP email
+- **POST /api/auth/verify**: Verifies email with OTP
+- **POST /api/auth/resend-otp**: Resends OTP if expired
+- **POST /api/auth/login**: Authenticates user and returns JWT token
+- **POST /api/auth/forgot-password**: Sends password reset OTP
+- **POST /api/auth/reset-password**: Resets password with OTP
+- **GET /api/auth/me**: Gets current user info (requires authentication)
+
+---
+
+### Step 7: Protect Transaction Routes
+
+Update `routes/transactions.js` to require authentication:
+
+```javascript
+const express = require('express');
+const router = express.Router();
+const Transaction = require('../models/Transaction');
+const { protect } = require('../middleware/auth'); // Import protect middleware
+
+// Apply protection to all transaction routes
+router.use(protect);
+
+// ... rest of your transaction routes stay the same
+```
+
+**What this does:**
+- All transaction routes now require a valid JWT token
+- User must be logged in and verified to access transactions
+- Each transaction will be associated with the logged-in user
+
+---
+
+### Step 8: Update server.js
+
+Add authentication routes to `server.js`:
+
+```javascript
+// ... existing code ...
+
+// ============================================
+// ROUTES
+// ============================================
+
+// Health check endpoint
+app.get('/', (req, res) => {
+  res.json({
+    message: 'Centsible API is running',
+    version: '1.0.0',
+    status: 'healthy'
+  });
+});
+
+// Authentication routes
+const authRoutes = require('./routes/auth');
+app.use('/api/auth', authRoutes);
+
+// Transaction routes (protected)
+const transactionRoutes = require('./routes/transactions');
+app.use('/api/transactions', transactionRoutes);
+
+// ... rest of code ...
+```
+
+---
+
+### Step 9: Testing Authentication with Postman
+
+#### 1. Register User
+```
+POST http://localhost:5000/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "John Doe",
+  "email": "john@example.com",
+  "password": "password123"
+}
+```
+
+**Expected Response:**
+```json
+{
+  "success": true,
+  "message": "Registration successful! Please check your email for OTP verification.",
+  "data": {
+    "email": "john@example.com",
+    "name": "John Doe"
+  }
+}
+```
+
+#### 2. Verify Email
+Check your email for OTP, then:
+```
+POST http://localhost:5000/api/auth/verify
+Content-Type: application/json
+
+{
+  "email": "john@example.com",
+  "otp": "123456"
+}
+```
+
+**Expected Response:**
+```json
+{
+  "success": true,
+  "message": "Email verified successfully!",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "data": {
+    "id": "65abc...",
+    "name": "John Doe",
+    "email": "john@example.com",
+    "isVerified": true
+  }
+}
+```
+
+**Save the token!** You'll need it for protected routes.
+
+#### 3. Login
+```
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "john@example.com",
+  "password": "password123"
+}
+```
+
+#### 4. Access Protected Route
+```
+GET http://localhost:5000/api/auth/me
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+```
+
+#### 5. Access Transactions (Now Protected)
+```
+GET http://localhost:5000/api/transactions
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+```
+
+#### 6. Forgot Password
+```
+POST http://localhost:5000/api/auth/forgot-password
+Content-Type: application/json
+
+{
+  "email": "john@example.com"
+}
+```
+
+#### 7. Reset Password
+Check email for reset OTP, then:
+```
+POST http://localhost:5000/api/auth/reset-password
+Content-Type: application/json
+
+{
+  "email": "john@example.com",
+  "otp": "654321",
+  "newPassword": "newpassword123"
+}
+```
+
+---
+
+### Step 10: Frontend Integration
+
+Create `src/services/authAPI.js` in your React app:
+
+```javascript
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+export const authAPI = {
+  // Register user
+  register: async (name, email, password) => {
+    const response = await fetch(`${API_URL}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, password })
+    });
+    return response.json();
+  },
+
+  // Verify email
+  verify: async (email, otp) => {
+    const response = await fetch(`${API_URL}/auth/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, otp })
+    });
+    return response.json();
+  },
+
+  // Resend OTP
+  resendOTP: async (email) => {
+    const response = await fetch(`${API_URL}/auth/resend-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    return response.json();
+  },
+
+  // Login
+  login: async (email, password) => {
+    const response = await fetch(`${API_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await response.json();
+    
+    // Store token in localStorage
+    if (data.success && data.token) {
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.data));
+    }
+    
+    return data;
+  },
+
+  // Logout
+  logout: () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+  },
+
+  // Forgot password
+  forgotPassword: async (email) => {
+    const response = await fetch(`${API_URL}/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    return response.json();
+  },
+
+  // Reset password
+  resetPassword: async (email, otp, newPassword) => {
+    const response = await fetch(`${API_URL}/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, otp, newPassword })
+    });
+    return response.json();
+  },
+
+  // Get current user
+  getCurrentUser: async () => {
+    const token = localStorage.getItem('token');
+    if (!token) throw new Error('No token found');
+
+    const response = await fetch(`${API_URL}/auth/me`, {
+      headers: { 
+        'Authorization': `Bearer ${token}` 
+      }
+    });
+    return response.json();
+  },
+
+  // Get token
+  getToken: () => localStorage.getItem('token')
+};
+```
+
+**Update `src/services/api.js`** to include token in requests:
+
+```javascript
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+const fetchAPI = async (endpoint, options = {}) => {
+  try {
+    // Get token from localStorage
+    const token = localStorage.getItem('token');
+    
+    const response = await fetch(`${API_URL}${endpoint}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` }), // Add token if exists
+        ...options.headers,
+      },
+      ...options,
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Something went wrong');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('API Error:', error);
+    throw error;
+  }
+};
+
+// ... rest of your transaction API methods ...
+```
+
+---
+
+## 🎉 Authentication Complete!
+
+You now have a fully functional authentication system with:
+- ✅ User registration
+- ✅ Email verification via OTP
+- ✅ User login with JWT
+- ✅ Forgot password
+- ✅ Reset password
+- ✅ Protected routes
+
+---
+
+## 🚀 Additional Advanced Features
+
+### 1. Input Validation with Express Validator
+
+Input validation ensures data integrity and prevents security issues.
+
+#### Install Express Validator
+
 ```bash
 npm install express-validator
 ```
 
-Create `middleware/validation.js`:
-```javascript
-const { body, validationResult } = require('express-validator');
+#### Create Validation Middleware
 
-exports.validateTransaction = [
-  body('type').isIn(['income', 'expense']),
-  body('amount').isFloat({ min: 0 }),
-  body('category').notEmpty().trim(),
-  body('date').isISO8601(),
-  body('description').optional().trim().isLength({ max: 500 }),
-  (req, res, next) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
-    next();
+Create `middleware/validation.js`:
+
+```javascript
+const { body, param, validationResult } = require('express-validator');
+
+/**
+ * Middleware to check validation results
+ */
+const checkValidation = (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      errors: errors.array().map(err => ({
+        field: err.param,
+        message: err.msg
+      }))
+    });
   }
+  next();
+};
+
+/**
+ * Transaction validation rules
+ */
+exports.validateTransaction = [
+  body('type')
+    .isIn(['income', 'expense'])
+    .withMessage('Type must be either income or expense'),
+  body('amount')
+    .isFloat({ min: 0.01 })
+    .withMessage('Amount must be a positive number'),
+  body('category')
+    .notEmpty()
+    .withMessage('Category is required')
+    .trim()
+    .isLength({ min: 2, max: 50 })
+    .withMessage('Category must be between 2 and 50 characters'),
+  body('date')
+    .isISO8601()
+    .withMessage('Date must be a valid ISO 8601 date'),
+  body('description')
+    .optional()
+    .trim()
+    .isLength({ max: 500 })
+    .withMessage('Description cannot exceed 500 characters'),
+  checkValidation
 ];
+
+/**
+ * User registration validation
+ */
+exports.validateRegister = [
+  body('name')
+    .notEmpty()
+    .withMessage('Name is required')
+    .trim()
+    .isLength({ min: 2, max: 50 })
+    .withMessage('Name must be between 2 and 50 characters'),
+  body('email')
+    .isEmail()
+    .withMessage('Please provide a valid email')
+    .normalizeEmail(),
+  body('password')
+    .isLength({ min: 6 })
+    .withMessage('Password must be at least 6 characters')
+    .matches(/\d/)
+    .withMessage('Password must contain at least one number'),
+  checkValidation
+];
+
+/**
+ * Login validation
+ */
+exports.validateLogin = [
+  body('email')
+    .isEmail()
+    .withMessage('Please provide a valid email')
+    .normalizeEmail(),
+  body('password')
+    .notEmpty()
+    .withMessage('Password is required'),
+  checkValidation
+];
+
+/**
+ * MongoDB ID validation
+ */
+exports.validateId = [
+  param('id')
+    .isMongoId()
+    .withMessage('Invalid ID format'),
+  checkValidation
+];
+
+module.exports.checkValidation = checkValidation;
 ```
 
-### 3. Rate Limiting
+#### Use Validation in Routes
 
-Install rate limiter:
+Update `routes/transactions.js`:
+
+```javascript
+const { validateTransaction, validateId } = require('../middleware/validation');
+
+// Apply validation to routes
+router.post('/', validateTransaction, async (req, res) => {
+  // ... existing code ...
+});
+
+router.put('/:id', validateId, validateTransaction, async (req, res) => {
+  // ... existing code ...
+});
+
+router.delete('/:id', validateId, async (req, res) => {
+  // ... existing code ...
+});
+```
+
+Update `routes/auth.js`:
+
+```javascript
+const { validateRegister, validateLogin } = require('../middleware/validation');
+
+router.post('/register', validateRegister, async (req, res) => {
+  // ... existing code ...
+});
+
+router.post('/login', validateLogin, async (req, res) => {
+  // ... existing code ...
+});
+```
+
+**Benefits:**
+- Prevents invalid data from reaching your database
+- Provides clear error messages to users
+- Improves security and data integrity
+
+---
+
+### 2. Rate Limiting
+
+Rate limiting prevents abuse by limiting the number of requests from a single IP.
+
+#### Install Rate Limiter
+
 ```bash
 npm install express-rate-limit
 ```
 
-Add to `server.js`:
+#### Add to server.js
+
 ```javascript
 const rateLimit = require('express-rate-limit');
 
-const limiter = rateLimit({
+// General rate limiter for all API routes
+const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
+  max: 100, // Limit each IP to 100 requests per windowMs
+  message: {
+    success: false,
+    error: 'Too many requests, please try again later.'
+  },
+  standardHeaders: true, // Return rate limit info in headers
+  legacyHeaders: false
 });
 
-app.use('/api/', limiter);
+// Stricter rate limiter for auth routes
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Limit each IP to 5 requests per windowMs
+  skipSuccessfulRequests: true, // Don't count successful requests
+  message: {
+    success: false,
+    error: 'Too many authentication attempts, please try again later.'
+  }
+});
+
+// Apply rate limiting
+app.use('/api/', apiLimiter);
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', authLimiter);
 ```
+
+**What this does:**
+- Limits general API requests to 100 per 15 minutes per IP
+- Limits auth attempts to 5 per 15 minutes per IP
+- Prevents brute force attacks and API abuse
+
+---
+
+### 3. Logging with Morgan
+
+Morgan logs HTTP requests for debugging and monitoring.
+
+#### Install Morgan
+
+```bash
+npm install morgan
+```
+
+#### Add to server.js
+
+```javascript
+const morgan = require('morgan');
+const fs = require('fs');
+const path = require('path');
+
+// Create logs directory if it doesn't exist
+if (!fs.existsSync('logs')) {
+  fs.mkdirSync('logs');
+}
+
+// Create a write stream for logging to file
+const accessLogStream = fs.createWriteStream(
+  path.join(__dirname, 'logs', 'access.log'),
+  { flags: 'a' }
+);
+
+// Log to console in development
+if (process.env.NODE_ENV === 'development') {
+  app.use(morgan('dev'));
+}
+
+// Log to file in production
+if (process.env.NODE_ENV === 'production') {
+  app.use(morgan('combined', { stream: accessLogStream }));
+}
+```
+
+Update `.gitignore`:
+
+```
+node_modules/
+.env
+.DS_Store
+*.log
+logs/
+```
+
+**Benefits:**
+- Track API usage and errors
+- Debug issues more easily
+- Monitor performance
+
+---
+
+### 4. User-Specific Transactions
+
+Associate transactions with specific users so each user only sees their own data.
+
+#### Update Transaction Model
+
+Update `models/Transaction.js`:
+
+```javascript
+const transactionSchema = new mongoose.Schema({
+  user: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  type: {
+    type: String,
+    enum: ['income', 'expense'],
+    required: [true, 'Transaction type is required']
+  },
+  // ... rest of fields stay the same
+}, {
+  timestamps: true
+});
+
+// Index for better query performance
+transactionSchema.index({ user: 1, date: -1 });
+```
+
+#### Update Transaction Routes
+
+Update `routes/transactions.js`:
+
+```javascript
+// GET all transactions for logged-in user
+router.get('/', async (req, res) => {
+  try {
+    const { type, category, startDate, endDate } = req.query;
+    
+    let query = { user: req.user._id }; // Only get user's transactions
+    
+    if (type) query.type = type;
+    if (category) query.category = category;
+    if (startDate || endDate) {
+      query.date = {};
+      if (startDate) query.date.$gte = new Date(startDate);
+      if (endDate) query.date.$lte = new Date(endDate);
+    }
+    
+    const transactions = await Transaction.find(query)
+      .sort({ date: -1 })
+      .limit(100);
+    
+    res.json({
+      success: true,
+      count: transactions.length,
+      data: transactions
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// CREATE transaction for logged-in user
+router.post('/', async (req, res) => {
+  try {
+    const { type, amount, category, date, description } = req.body;
+    
+    if (!type || !amount || !category || !date) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please provide type, amount, category, and date'
+      });
+    }
+    
+    const transaction = new Transaction({
+      user: req.user._id, // Associate with logged-in user
+      type,
+      amount,
+      category,
+      date,
+      description
+    });
+    
+    await transaction.save();
+    
+    res.status(201).json({
+      success: true,
+      message: 'Transaction created successfully',
+      data: transaction
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// UPDATE - ensure user owns the transaction
+router.put('/:id', async (req, res) => {
+  try {
+    const transaction = await Transaction.findOne({
+      _id: req.params.id,
+      user: req.user._id // Only update if user owns it
+    });
+    
+    if (!transaction) {
+      return res.status(404).json({
+        success: false,
+        error: 'Transaction not found'
+      });
+    }
+    
+    Object.assign(transaction, req.body);
+    await transaction.save();
+    
+    res.json({
+      success: true,
+      message: 'Transaction updated successfully',
+      data: transaction
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// DELETE - ensure user owns the transaction
+router.delete('/:id', async (req, res) => {
+  try {
+    const transaction = await Transaction.findOneAndDelete({
+      _id: req.params.id,
+      user: req.user._id // Only delete if user owns it
+    });
+    
+    if (!transaction) {
+      return res.status(404).json({
+        success: false,
+        error: 'Transaction not found'
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Transaction deleted successfully',
+      data: transaction
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// GET summary for logged-in user
+router.get('/stats/summary', async (req, res) => {
+  try {
+    const transactions = await Transaction.find({ user: req.user._id });
+    
+    const totalIncome = transactions
+      .filter(t => t.type === 'income')
+      .reduce((sum, t) => sum + t.amount, 0);
+    
+    const totalExpenses = transactions
+      .filter(t => t.type === 'expense')
+      .reduce((sum, t) => sum + t.amount, 0);
+    
+    const balance = totalIncome - totalExpenses;
+    
+    res.json({
+      success: true,
+      data: {
+        totalIncome,
+        totalExpenses,
+        balance,
+        transactionCount: transactions.length
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+```
+
+**Benefits:**
+- Each user only sees their own transactions
+- Improved security and privacy
+- Multi-user support
+
+---
+
+### 5. Error Handling Middleware
+
+Create consistent error responses across your API.
+
+#### Create Error Handler
+
+Create `middleware/errorHandler.js`:
+
+```javascript
+/**
+ * Custom error class
+ */
+class AppError extends Error {
+  constructor(message, statusCode) {
+    super(message);
+    this.statusCode = statusCode;
+    this.isOperational = true;
+    Error.captureStackTrace(this, this.constructor);
+  }
+}
+
+/**
+ * Global error handler
+ */
+const errorHandler = (err, req, res, next) => {
+  let error = { ...err };
+  error.message = err.message;
+
+  // Log error for debugging
+  if (process.env.NODE_ENV === 'development') {
+    console.error('Error:', err);
+  }
+
+  // Mongoose bad ObjectId
+  if (err.name === 'CastError') {
+    const message = 'Resource not found';
+    error = new AppError(message, 404);
+  }
+
+  // Mongoose duplicate key
+  if (err.code === 11000) {
+    const field = Object.keys(err.keyValue)[0];
+    const message = `${field} already exists`;
+    error = new AppError(message, 400);
+  }
+
+  // Mongoose validation error
+  if (err.name === 'ValidationError') {
+    const message = Object.values(err.errors).map(val => val.message).join(', ');
+    error = new AppError(message, 400);
+  }
+
+  // JWT errors
+  if (err.name === 'JsonWebTokenError') {
+    const message = 'Invalid token';
+    error = new AppError(message, 401);
+  }
+
+  if (err.name === 'TokenExpiredError') {
+    const message = 'Token expired';
+    error = new AppError(message, 401);
+  }
+
+  res.status(error.statusCode || 500).json({
+    success: false,
+    error: error.message || 'Server error'
+  });
+};
+
+module.exports = { AppError, errorHandler };
+```
+
+#### Update server.js
+
+```javascript
+const { errorHandler } = require('./middleware/errorHandler');
+
+// ... all your routes ...
+
+// Error handler (must be last middleware)
+app.use(errorHandler);
+```
+
+**Benefits:**
+- Consistent error responses
+- Better error logging
+- Cleaner code with centralized error handling
+
+---
 
 ---
 
